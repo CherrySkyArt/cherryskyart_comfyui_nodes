@@ -9,9 +9,7 @@ for _p in [_current_dir, _models_dir]:
 
 from typing_extensions import override
 from comfy_api.latest import ComfyExtension, io
-from .bskiconditioning import BskiVideoSmooth
 from .first_last import FirstLast
-# from .bskiUtils import MaskBatchSplitter
 from .KJbox2Comfy import KJBboxToComfyBBox
 from .mask_grow_plus import MaskGrowPlus
 from .cherry_nodes import AppendAnyToList
@@ -27,7 +25,6 @@ WEB_DIRECTORY = "./web"
 
 NODE_CLASS_MAPPINGS = {
     "AppendAnyToList": AppendAnyToList,
-    "BskiVideoSmooth": BskiVideoSmooth,
     "FirstLast": FirstLast,
     "KJBboxToComfyBBox": KJBboxToComfyBBox,
     "MaskGrowPlus": MaskGrowPlus,
@@ -42,7 +39,6 @@ NODE_CLASS_MAPPINGS = {
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "AppendAnyToList": "Append Any To List",
-    "BskiVideoSmooth": "Video Smooth :)",
     "FirstLast": "first last super cool",
     "MaskBatchSplitter //Inspire": "MaskBatchSplitter",
     "KJBboxToComfyBBox": "KJ Bbox To Comfy BBox",
@@ -59,7 +55,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
 class CherryExtension(ComfyExtension):
     @override
     async def get_node_list(self) -> list[type[io.ComfyNode]]:
-        return [AppendAnyToList, BskiVideoSmooth, FirstLast, KJBboxToComfyBBox, MaskGrowPlus, ImageListToImageBatch, Remove1stImageOfBatch, CherrySAM3Segment, DepthMeasure, LazySort, StringPlus]
+        return [AppendAnyToList, FirstLast, KJBboxToComfyBBox, MaskGrowPlus, ImageListToImageBatch, Remove1stImageOfBatch, CherrySAM3Segment, DepthMeasure, LazySort, StringPlus]
 
 async def comfy_entrypoint() -> CherryExtension:
     return CherryExtension()
