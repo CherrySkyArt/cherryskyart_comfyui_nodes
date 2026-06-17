@@ -1,0 +1,5 @@
+COPY AND PASTED 
+
+@ April 2026
+https://github.com/1038lab/ComfyUI-RMBG/tree/638173d8db3826fa8dfd47f8f8e22138d7f4b032
+https://github.com/1038lab/ComfyUI-RMBG/tree/main/models/sam3/model
