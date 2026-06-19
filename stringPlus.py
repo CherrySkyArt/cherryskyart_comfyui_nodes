@@ -5,8 +5,8 @@ class StringPlus(io.ComfyNode):
     @classmethod
     def define_schema(cls):
         return io.Schema(
-            node_id="StringTemplate",
-            display_name="String Plus (Template)",
+            node_id="CherryStringTemplate",
+            display_name="String Plus (Template) 🍒",
             category="utils",
             description=(
                 "Resolves a template string containing %date:yyyy-MM-dd%, "

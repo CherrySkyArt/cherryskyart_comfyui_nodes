@@ -20,6 +20,7 @@ from .depth_measure import DepthMeasure
 from .lazy_sort import LazySort
 # from .preview_any import PreviewAny
 from .stringPlus import StringPlus
+from .first_last_v2 import WanFLF2VMask_Cherry
 
 WEB_DIRECTORY = "./web"
 
@@ -33,7 +34,8 @@ NODE_CLASS_MAPPINGS = {
     "CherrySAM3Segment": CherrySAM3Segment,
     "DepthMeasure": DepthMeasure,
     "LazySort": LazySort,
-    "StringTemplate": StringPlus
+    "CherryStringTemplate": StringPlus,
+    "WanFLF2VMask_Cherry": WanFLF2VMask_Cherry
     # "MaskBatchSplitter //Inspire": MaskBatchSplitter,
 }
 
@@ -48,14 +50,15 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "CherrySAM3Segment": "SAM3 Segment (Cherry)",
     "DepthMeasure": "Depth Measure",
     "LazySort": "Lazy Sort",
-    "StringTemplate": "String Template",
+    "CherryStringTemplate": "String Plus (Template) 🍒",
+    "WanFLF2VMask_Cherry": "WanFLF2VMask_Cherry"
 }
 
 
 class CherryExtension(ComfyExtension):
     @override
     async def get_node_list(self) -> list[type[io.ComfyNode]]:
-        return [AppendAnyToList, FirstLast, KJBboxToComfyBBox, MaskGrowPlus, ImageListToImageBatch, Remove1stImageOfBatch, CherrySAM3Segment, DepthMeasure, LazySort, StringPlus]
+        return [AppendAnyToList, FirstLast, KJBboxToComfyBBox, MaskGrowPlus, ImageListToImageBatch, Remove1stImageOfBatch, CherrySAM3Segment, DepthMeasure, LazySort, StringPlus, WanFLF2VMask_Cherry]
 
 async def comfy_entrypoint() -> CherryExtension:
     return CherryExtension()

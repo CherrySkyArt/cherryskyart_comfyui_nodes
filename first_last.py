@@ -112,8 +112,6 @@ class FirstLast(io.ComfyNode):
                     "denoise_mask", default=0.20, min=0.0, max=1.0, step=0.01, round=0.01,
                     display_mode=io.NumberDisplay.slider,
                     tooltip="# 1 = big change, 0 = zero change (1=must look like anchor image, 0=dont?)",
-                    # tooltip="2nd step denoise, how closely Wan stays to newly generated anchor_images",
-                    # tooltip="0 = preserve frames exactly, 1 = regenerate completely. Low values (0.1-0.3) smooth while preserving content.",
                 ),
             ],
             outputs=[
@@ -147,10 +145,6 @@ class FirstLast(io.ComfyNode):
           and use_end_samples is True), and hard-lock them via the concat_mask
           (FLF-style control).
         """
-        logging.info("---- COPY PASTE WORKING ----")
-        logging.info("---- COPY PASTE WORKING ----")
-        logging.info("---- COPY PASTE WORKING ----")
-        logging.info("---- COPY PASTE WORKING ----")
 
         # Anchor latent for this segment: [B, C, T_anchor, H, W]
         anchor_latent = anchor_samples["samples"].clone()
@@ -162,69 +156,52 @@ class FirstLast(io.ComfyNode):
         device = anchor_latent.device
         dtype = anchor_latent.dtype
 
-        # ---------------------------------------------------------------------
-        # 1) Base temporal block:
-        #    anchor + optional motion tail from prev_samples (SVI Pro logic).
-        # ---------------------------------------------------------------------
         if prev_samples is None or motion_latent_count == 0:
-            # No previous segment or motion continuity disabled:
-            # start purely from the anchor latent block.
             base_latent = anchor_latent
         else:
             # Previous segment latents: [B, C, T_prev, H, W]
             prev_latent = prev_samples["samples"].clone()
             T_prev = prev_latent.shape[2]
 
-            # We can only take as many time slots as prev_latent actually has.
             motion_count = min(motion_latent_count, T_prev)
 
             if motion_count > 0:
-                # Take the last `motion_count` temporal slots as motion tail:
                 # shape [B, C, T_m, H, W].
                 motion_latent = prev_latent[:, :, -motion_count:]
-                # Concatenate anchor and motion along the temporal axis.
-                base_latent = torch.cat([anchor_latent, motion_latent], dim=2)
+                # base_latent = torch.cat([anchor_latent, motion_latent], dim=2)
+                base_latent = torch.cat([motion_latent, anchor_latent], dim=2)
+
             else:
-                # motion_latent_count requested 0 or prev had T_prev=0 (edge case)
                 base_latent = anchor_latent
 
         T_base = base_latent.shape[2]
         padding_size = max(total_latents - T_base, 0)
 
-        # ---------------------------------------------------------------------
-        # 2) Pad with Wan-format zeros to reach total_latents.
-        #    This ensures the conditioning latent has the exact temporal
-        #    length expected by the Wan sampler.
-        # ---------------------------------------------------------------------
+
+
+
+        # Create zero latents and convert them to Wan's internal format.
         if padding_size > 0:
-            # Create zero latents and convert them to Wan's internal format.
             padding = torch.zeros(B, C, padding_size, H, W, dtype=dtype, device=device)
             padding = comfy.latent_formats.Wan21().process_out(padding)
-            # Append padding after the base sequence.
             image_cond_latent = torch.cat([base_latent, padding], dim=2)
         else:
             # If base_latent is longer than needed, truncate it.
             image_cond_latent = base_latent[:, :, :total_latents]
 
-        # Safety clamp in case of any mismatch.
+        # Safety clamp
         if image_cond_latent.shape[2] != total_latents:
             image_cond_latent = image_cond_latent[:, :, :total_latents]
 
-        # ---------------------------------------------------------------------
-        # 3) End behavior like WanFirstLastFrameToVideo (FLF-style):
-        #    hard-lock the last frames to end_samples, if enabled and provided.
-        # ---------------------------------------------------------------------
+
         end_t_fix = 0
         if use_end_samples and end_samples is not None:
             # [B_end, C, T_end, H, W] or [1, C, T_end, H, W]
             end_latent = end_samples["samples"].clone()
 
-            # If end_latent has batch size 1 but our segment batch is larger,
-            # repeat it across the batch dimension.
             if end_latent.shape[0] == 1 and B > 1:
                 end_latent = end_latent.repeat(B, 1, 1, 1, 1)
 
-            # Check that channels and spatial dimensions match.
             if (
                 end_latent.shape[1] == C
                 and end_latent.shape[3] == H
@@ -235,35 +212,18 @@ class FirstLast(io.ComfyNode):
                 logging.info("---- doing end_frame stuff ----")
                 T_end = end_latent.shape[2]
 
-                # FLF2V-style: fix as many frames as the end block provides,
-                # but not more than total_latents.
                 end_t_fix = min(T_end, total_latents)
 
                 if end_t_fix > 0:
-                    # Overwrite the last `end_t_fix` temporal slots of
-                    # image_cond_latent with the last slots of end_latent.
                     image_cond_latent[:, :, -end_t_fix:] = end_latent[:, :, -end_t_fix:]
             else:
-                # Shape mismatch: skip end locking for safety.
                 end_t_fix = 0
 
-        # ---------------------------------------------------------------------
-        # 4) Empty latent to be filled by the Wan sampler.
-        #    Shape: [B, 16, total_latents, H, W] for Wan video UNet.
-        # ---------------------------------------------------------------------
         empty_latent = torch.zeros(
             [B, 16, total_latents, H, W],
             device=comfy.model_management.intermediate_device(),
         )
-
-        # ---------------------------------------------------------------------
-        # 5) Mask:
-        #    - First temporal slot (anchor) is fixed: mask=0 at t=0.
-        #    - Last end_t_fix slots are fixed if end_samples is provided
-        #      and use_end_samples is True.
-        #
-        # Wan / SVI Pro use concat_mask==0 to mark slots that should stay
-        # equal to concat_latent_image during sampling.
+        # Wan / SVI Pro use concat_mask==0 to mark slots that should stay equal to concat_latent_image during sampling.
         # ---------------------------------------------------------------------
         mask = torch.ones((1, 1, total_latents, H, W), device=device, dtype=dtype)
 
@@ -285,14 +245,14 @@ class FirstLast(io.ComfyNode):
         logging.info("MASK BEFORE")
         logging.info(mask)
         # Lock the last temporal slots corresponding to end_samples.
-        if end_t_fix > 0:        
+        if end_t_fix > 0:
+            mask[:, :, -end_t_fix:] = 0.0
             image_cond_latent[:, :, -end_t_fix:] = end_latent[:, :, -end_t_fix:]
-            
-            # denoise_mask=
-            # denoise_mask=
-            mask[:, :, -end_t_fix:] = denoise_mask # 0.0 → locked. 1.0 → free to generate
-
-            # mask[:, :, -end_t_fix:] = 0.0
+            # image_cond_latent[:, :, -end_t_fix:] = torch.lerp(
+            #     torch.zeros_like(end_latent[:, :, -end_t_fix:]),
+            #     end_latent[:, :, -end_t_fix:],
+            #     denoise_mask,
+            # )
 
             logging.info("MASK AFTER")
             logging.info("MASK AFTER")
@@ -303,11 +263,7 @@ class FirstLast(io.ComfyNode):
             logging.info("MASK AFTER")
             logging.info("MASK AFTER")
             logging.info(mask)
-        # ---------------------------------------------------------------------
-        # 6) Inject concat_latent_image and concat_mask into conditioning.
-        #    Both positive and negative conditioning receive the same concat
-        #    latent and mask so the sampler can enforce structure consistently.
-        # ---------------------------------------------------------------------
+
         positive = node_helpers.conditioning_set_values(
             positive,
             {
