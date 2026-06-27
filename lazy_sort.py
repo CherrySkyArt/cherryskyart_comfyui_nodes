@@ -9,10 +9,11 @@ class LazySort(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="LazySort",
-            display_name="Lazy Sort (L→R) 🍒",
-            search_aliases=["cherry" "left", "right", "order", "position", "sort", "center", "mass"],
+            display_name="Lazy Sort 🍒",
+            is_input_list=True,
+            search_aliases=["left", "right", "top", "bottom", "order", "position", "sort", "center", "mass"],
             description=(
-                "Sorts segmented objects left-to-right by mask center-of-mass. "
+                "Sorts segmented objects by mask center-of-mass. "
                 "Robust to outstretched limbs — a hand tip is a few pixels vs thousands in the torso."
             ),
             category="image/batch",
@@ -28,7 +29,12 @@ class LazySort(io.ComfyNode):
                     optional=True,
                     tooltip="Bounding boxes in original-image coords. Required to offset cropped-mask centroids into global space.",
                 ),
-                io.Boolean.Input("is_left_to_right", default=True, optional=True),
+                io.Combo.Input(
+                    "sort_direction",
+                    options=["Left → Right", "Right → Left", "Top → Bottom", "Bottom → Top"],
+                    default="Left → Right",
+                    optional=True,
+                ),
             ],
             outputs=[
                 io.Image.Output("images"),
@@ -38,27 +44,44 @@ class LazySort(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, images, masks=None, bboxes=None, is_left_to_right=True) -> io.NodeOutput:
+    def execute(cls, images, masks=None, bboxes=None, sort_direction="Left → Right") -> io.NodeOutput:
+        # is_input_list=True: everything arrives as a list; unwrap widget scalar
+        if isinstance(sort_direction, list):
+            sort_direction = sort_direction[0]
+
+        # Stack tensors into a single batch
+        if isinstance(images, list):
+            images = torch.cat(images, dim=0)
+        if isinstance(masks, list):
+            masks = torch.cat(masks, dim=0)
+
         n = images.shape[0]
 
-        # Normalize bboxes: [[{...}, ...]] -> [{...}, ...]
+        # Normalize bboxes to a flat list of dicts
         flat_bboxes = None
         if bboxes is not None:
-            flat_bboxes = (
-                bboxes[0]
-                if isinstance(bboxes, list) and bboxes and isinstance(bboxes[0], list)
-                else bboxes
-            )
+            flat = []
+            items = bboxes if isinstance(bboxes, list) else [bboxes]
+            for b in items:
+                if isinstance(b, dict):
+                    flat.append(b)
+                elif isinstance(b, list):
+                    flat.extend(b)
+            flat_bboxes = flat or None
+
+        use_y = sort_direction in ("Top → Bottom", "Bottom → Top")
+        reverse = sort_direction in ("Right → Left", "Bottom → Top")
 
         keys = [
-            cls._center_x(
+            cls._center(
                 masks[i] if (masks is not None and i < masks.shape[0]) else None,
                 flat_bboxes[i] if (flat_bboxes is not None and i < len(flat_bboxes)) else None,
+                use_y=use_y,
             )
             for i in range(n)
         ]
 
-        order = sorted(range(n), key=lambda i: keys[i], reverse=not is_left_to_right)
+        order = sorted(range(n), key=lambda i: keys[i], reverse=reverse)
         idx = torch.tensor(order, dtype=torch.long)
 
         out_images = images[idx]
@@ -68,36 +91,32 @@ class LazySort(io.ComfyNode):
         return io.NodeOutput(out_images, out_masks, out_bboxes)
 
     @classmethod
-    def _center_x(cls, mask, bbox) -> float:
-        """
-        Weighted x centroid of a single mask in original-image coordinates.
-
-        The centroid is mass-weighted: a person's torso contributes thousands of
-        pixels while an outstretched hand contributes only a few, so the result
-        is naturally anchored to the body bulk rather than the extremities.
-
-        Detection of cropped vs full-res mask: if mask width is within 4px of
-        bbox["width"], it's a crop and we offset by bbox["x"].
-        """
+    def _center(cls, mask, bbox, use_y=False) -> float:
+        # Mass-weighted centroid so torso bulk dominates over outstretched limbs; offsets cropped masks into global coords.
         if mask is not None:
             m = mask.cpu().float().numpy()
             if m.ndim == 3:
-                m = m[0]  # drop leading dim if present
+                m = m[0]
 
             total = float(m.sum())
             if total > 1e-6:
-                mask_w = m.shape[1]
-                col_sums = m.sum(axis=0)                          # [W]
-                local_cx = float((np.arange(mask_w, dtype=np.float32) * col_sums).sum() / total)
+                if use_y:
+                    mask_h = m.shape[0]
+                    row_sums = m.sum(axis=1)
+                    local_c = float((np.arange(mask_h, dtype=np.float32) * row_sums).sum() / total)
+                    if bbox is not None and abs(mask_h - bbox["height"]) <= 4:
+                        return bbox["y"] + local_c
+                    return local_c
+                else:
+                    mask_w = m.shape[1]
+                    col_sums = m.sum(axis=0)
+                    local_c = float((np.arange(mask_w, dtype=np.float32) * col_sums).sum() / total)
+                    if bbox is not None and abs(mask_w - bbox["width"]) <= 4:
+                        return bbox["x"] + local_c
+                    return local_c
 
-                if bbox is not None and abs(mask_w - bbox["width"]) <= 4:
-                    # Cropped mask — shift into global image coords
-                    return bbox["x"] + local_cx
-                # Full-res mask — centroid already in global coords
-                return local_cx
-
-        # Fallback: bbox horizontal midpoint
+        # Fallback: bbox midpoint
         if bbox is not None:
-            return bbox["x"] + bbox["width"] * 0.5
+            return (bbox["y"] + bbox["height"] * 0.5) if use_y else (bbox["x"] + bbox["width"] * 0.5)
 
         return 0.0

@@ -10,6 +10,7 @@ class DepthMeasure(io.ComfyNode):
         return io.Schema(
             node_id="DepthMeasure",
             display_name="Depth Measure 🍒",
+            is_input_list=True,
             category="image/depth",
             search_aliases=["cherry", "depth", "distance", "depth map", "measure distance", "closest", "furthest", "controlnet"],
             description=(
@@ -42,6 +43,15 @@ class DepthMeasure(io.ComfyNode):
 
     @classmethod
     def execute(cls, imgs_depthmap, images=None, masks=None, sort_output="Closest"):
+        if isinstance(sort_output, list):
+            sort_output = sort_output[0]
+        if isinstance(imgs_depthmap, list):
+            imgs_depthmap = torch.cat(imgs_depthmap, dim=0)
+        if isinstance(images, list):
+            images = torch.cat(images, dim=0)
+        if isinstance(masks, list):
+            masks = torch.cat(masks, dim=0)
+
         n = imgs_depthmap.shape[0]
 
         # Brighter = closer (Depth Anything v2 relative, MiDaS disparity convention).

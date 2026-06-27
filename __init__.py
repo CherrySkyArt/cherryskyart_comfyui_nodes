@@ -21,6 +21,10 @@ from .lazy_sort import LazySort
 # from .preview_any import PreviewAny
 from .stringPlus import StringPlus
 from .first_last_v2 import WanFLF2VMask_Cherry
+from .first_last_v3 import WanImageToVideoSVIProFLF_Cherry
+from .first_last_v2_old import WanFLF2VMask_Cherry_old
+from .bbox_unpack import BoundingBoxUnpack
+from .alpha_composite import AlphaComposite
 
 WEB_DIRECTORY = "./web"
 
@@ -35,7 +39,11 @@ NODE_CLASS_MAPPINGS = {
     "DepthMeasure": DepthMeasure,
     "LazySort": LazySort,
     "CherryStringTemplate": StringPlus,
-    "WanFLF2VMask_Cherry": WanFLF2VMask_Cherry
+    "WanFLF2VMask_Cherry": WanFLF2VMask_Cherry,
+    "WanImageToVideoSVIProFLF_Cherry": WanImageToVideoSVIProFLF_Cherry,
+    "WanFLF2VMask_Cherry_old": WanFLF2VMask_Cherry_old,
+    "BoundingBoxUnpack": BoundingBoxUnpack,
+    "AlphaComposite_Cherry": AlphaComposite,
     # "MaskBatchSplitter //Inspire": MaskBatchSplitter,
 }
 
@@ -51,14 +59,18 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "DepthMeasure": "Depth Measure",
     "LazySort": "Lazy Sort",
     "CherryStringTemplate": "String Plus (Template) 🍒",
-    "WanFLF2VMask_Cherry": "WanFLF2VMask_Cherry"
+    "WanFLF2VMask_Cherry": "WanFLF2VMask_Cherry",
+    "WanImageToVideoSVIProFLF_Cherry": "WanImageToVideoSVIProFLF_Cherry",
+    "WanFLF2VMask_Cherry_old": "WanFLF2VMask_Cherry_old",
+    "BoundingBoxUnpack": "Bounding Box Unpack 🍒",
+    "AlphaComposite_Cherry": "Alpha Composite 🍒",
 }
 
 
 class CherryExtension(ComfyExtension):
     @override
     async def get_node_list(self) -> list[type[io.ComfyNode]]:
-        return [AppendAnyToList, FirstLast, KJBboxToComfyBBox, MaskGrowPlus, ImageListToImageBatch, Remove1stImageOfBatch, CherrySAM3Segment, DepthMeasure, LazySort, StringPlus, WanFLF2VMask_Cherry]
+        return [AppendAnyToList, FirstLast, KJBboxToComfyBBox, MaskGrowPlus, ImageListToImageBatch, Remove1stImageOfBatch, CherrySAM3Segment, DepthMeasure, LazySort, StringPlus, WanFLF2VMask_Cherry, WanImageToVideoSVIProFLF_Cherry, WanFLF2VMask_Cherry_old, BoundingBoxUnpack, AlphaComposite]
 
 async def comfy_entrypoint() -> CherryExtension:
     return CherryExtension()
