@@ -1,4 +1,5 @@
 
+import logging
 import torch
 import numpy as np
 from comfy_api.latest import io
@@ -67,6 +68,13 @@ class LazySort(io.ComfyNode):
                     flat.append(b)
                 elif isinstance(b, list):
                     flat.extend(b)
+            # Count must line up 1:1 with images, or bbox-based offsetting is meaningless.
+            if flat and len(flat) != n:
+                logging.warning(
+                    "LazySort: got %d bboxes for %d images, ignoring bboxes (mask/zero fallback used)",
+                    len(flat), n,
+                )
+                flat = []
             flat_bboxes = flat or None
 
         use_y = sort_direction in ("Top → Bottom", "Bottom → Top")

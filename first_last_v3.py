@@ -1,46 +1,18 @@
 import torch
-
 import comfy.model_management
 import comfy.latent_formats
-
 from nodes import MAX_RESOLUTION
 from comfy_api.latest import io
 import node_helpers
-import torch.nn.functional as F
 
 
 class WanImageToVideoSVIProFLF_Cherry(io.ComfyNode):
-
-    """
-    WanImageToVideoSVIProFLF
-    Combines Wan SVI 2 Pro–style motion continuity with FLF-style
-    (First/Last Frame) control over the end of the clip.
-
-    - Start: behaves like WanImageToVideoSVIPro (anchor frame + optional motion
-      continuation from prev_samples, SVI Pro style).
-    - End: behaves like WanFirstLastFrameToVideo / FLF2V, where the last
-      temporal slots are hard-locked to the provided end_samples block.
-
-    Typical use:
-    - start_samples: first frame (or short latent clip) of this segment.
-    - prev_samples: tail latents from the previous segment to continue motion.
-    - end_samples: last frame (or short latent clip) that should define the end.
-
-    ---
-    License: GPL-3.0
-    Based on:
-      - WanImageToVideoSVIPro: https://github.com/kijai/ComfyUI-KJNodes
-      - WanFirstLastFrameToVideo: https://github.com/Comfy-Org/ComfyUI
-    Author: Well-Made
-    Repository: https://github.com/Well-Made/ComfyUI-Wan-SVI2Pro-FLF
-    """
-
     @classmethod
     def define_schema(cls):
         return io.Schema(
             node_id="WanImageToVideoSVIProFLF_Cherry",
             category="conditioning/video_models",
-            display_name="WanI2V_SVI_Cherry Mask 🍒",
+            display_name="WanI2V_SVI_Cherry Mask v3 🍒",
             inputs=[
                 io.Conditioning.Input("positive"),
                 io.Conditioning.Input("negative"),
@@ -57,6 +29,7 @@ class WanImageToVideoSVIProFLF_Cherry(io.ComfyNode):
                 ),
                 io.Latent.Input(
                     "prev_samples",
+                    optional=True,
                     tooltip=(
                         "Previous segment latents (B,C,T,H,W). "
                         "The last motion_latent_count temporal slots will be "
@@ -65,9 +38,12 @@ class WanImageToVideoSVIProFLF_Cherry(io.ComfyNode):
                 ),
                 io.Latent.Input(
                     "start_samples",
+                    optional=True,
                     tooltip=(
                         "Anchor latent(s) for the current segment (B,C,T,H,W). "
-                        "Typically the first frame (or a very short clip) of this segment."
+                        "If omitted, no frame is hard-locked at the start - the segment "
+                        "runs purely off motion continuation from prev_samples (SVI Pro style), "
+                        "and only end_samples (if given) is locked."
                     ),
                 ),
                 io.Latent.Input(
@@ -79,15 +55,6 @@ class WanImageToVideoSVIProFLF_Cherry(io.ComfyNode):
                         "of the clip (FLF-style hard lock)."
                     ),
                 ),
-                io.Boolean.Input(
-                    "use_end_samples",
-                    default=True,
-                    tooltip=(
-                        "If enabled, the node will use end_samples (when connected) to hard-lock "
-                        "the last temporal slots of the clip. If disabled, behavior falls back "
-                        "to pure SVI Pro even if end_samples is provided."
-                    ),
-                ),
                 io.Int.Input(
                     "motion_latent_count",
                     default=1,
@@ -96,15 +63,20 @@ class WanImageToVideoSVIProFLF_Cherry(io.ComfyNode):
                     step=1,
                     tooltip=(
                         "How many last temporal latent slots to copy from prev_samples. "
-                        "0 = no motion continuity; 1–2 is typical for smooth transitions."
+                        "0 = no motion continuity; 1-2 is typical for smooth transitions."
                     ),
                 ),
-                io.Mask.Input(
+                io.Float.Input(
                     "end_mask",
-                    optional=True,
+                    default=1.0,
+                    min=0.0,
+                    max=1.0,
+                    step=0.01,
                     tooltip=(
-                        "Optional B/W mask (image-res). White = lock that section of the end "
-                        "frame; black = let the sampler generate it. Resized to latent res."
+                        "How strongly to lock the end frames. 1 = fully hard-locked to "
+                        "end_samples (max change from base), 0 = end_samples ignored and the "
+                        "base/generated content is kept (locked in). Wan2.2 latents can't be "
+                        "spatially masked, so this is a uniform strength, not a region mask."
                     ),
                 ),
             ],
@@ -122,150 +94,79 @@ class WanImageToVideoSVIProFLF_Cherry(io.ComfyNode):
         negative,
         length,
         prev_samples=None,
-        start_samples=None,
+        anchor_samples=None,
         end_samples=None,
         use_end_samples=True,
         motion_latent_count=1,
-        end_mask=None,
     ) -> io.NodeOutput:
-        """
-        Execution logic:
 
-        - Start: build a base temporal block from start_samples plus an optional
-          motion tail taken from the end of prev_samples (SVI Pro continuity).
-        - Padding: extend this block to the required temporal length for Wan
-          (total_latents) using Wan-formatted zero latents.
-        - End: overwrite the last temporal slots with end_samples (if provided
-          and use_end_samples is True), and hard-lock them via the concat_mask
-          (FLF-style control).
-        """
-
-        # Anchor latent for this segment: [B, C, T_anchor, H, W]
-        anchor_latent = start_samples["samples"].clone()
+        anchor_latent = anchor_samples["samples"].clone()
         B, C, T_anchor, H, W = anchor_latent.shape
 
-        # Compute number of temporal latent slots given Wan's stride=4.
-        # Example: length=41 frames -> total_latents=11.
         total_latents = (length - 1) // 4 + 1
         device = anchor_latent.device
         dtype = anchor_latent.dtype
 
-        # ---------------------------------------------------------------------
-        # 1) Base temporal block:
-        #    anchor + optional motion tail from prev_samples (SVI Pro logic).
-        # ---------------------------------------------------------------------
         if prev_samples is None or motion_latent_count == 0:
-            # No previous segment or motion continuity disabled:
-            # start purely from the anchor latent block.
             base_latent = anchor_latent
         else:
-            # Previous segment latents: [B, C, T_prev, H, W]
             prev_latent = prev_samples["samples"].clone()
             T_prev = prev_latent.shape[2]
 
-            # We can only take as many time slots as prev_latent actually has.
             motion_count = min(motion_latent_count, T_prev)
 
             if motion_count > 0:
-                # Take the last `motion_count` temporal slots as motion tail:
-                # shape [B, C, T_m, H, W].
                 motion_latent = prev_latent[:, :, -motion_count:]
-                # Concatenate anchor and motion along the temporal axis.
                 base_latent = torch.cat([anchor_latent, motion_latent], dim=2)
             else:
-                # motion_latent_count requested 0 or prev had T_prev=0 (edge case)
                 base_latent = anchor_latent
 
         T_base = base_latent.shape[2]
         padding_size = max(total_latents - T_base, 0)
 
-        # ---------------------------------------------------------------------
-        # 2) Pad with Wan-format zeros to reach total_latents.
-        #    This ensures the conditioning latent has the exact temporal
-        #    length expected by the Wan sampler.
-        # ---------------------------------------------------------------------
         if padding_size > 0:
-            # Create zero latents and convert them to Wan's internal format.
             padding = torch.zeros(B, C, padding_size, H, W, dtype=dtype, device=device)
             padding = comfy.latent_formats.Wan21().process_out(padding)
-            # Append padding after the base sequence.
             image_cond_latent = torch.cat([base_latent, padding], dim=2)
         else:
-            # If base_latent is longer than needed, truncate it.
             image_cond_latent = base_latent[:, :, :total_latents]
 
-        # Safety clamp in case of any mismatch.
         if image_cond_latent.shape[2] != total_latents:
             image_cond_latent = image_cond_latent[:, :, :total_latents]
 
-        # ---------------------------------------------------------------------
-        # 3) End behavior like WanFirstLastFrameToVideo (FLF-style):
-        #    hard-lock the last frames to end_samples, if enabled and provided.
-        # ---------------------------------------------------------------------
         end_t_fix = 0
         if use_end_samples and end_samples is not None:
             end_latent = end_samples["samples"].clone()
+
             if end_latent.shape[0] == 1 and B > 1:
                 end_latent = end_latent.repeat(B, 1, 1, 1, 1)
-            if (end_latent.shape[1] == C and end_latent.shape[3] == H
-                    and end_latent.shape[4] == W):
+
+            if (
+                end_latent.shape[1] == C
+                and end_latent.shape[3] == H
+                and end_latent.shape[4] == W
+            ):
                 T_end = end_latent.shape[2]
+
                 end_t_fix = min(T_end, total_latents)
+
                 if end_t_fix > 0:
-                    if end_mask is not None:
-                        m = end_mask
-                        if m.dim() == 2:
-                            m = m.unsqueeze(0)          # (b,h,w)
-                        m = m.unsqueeze(1).float()      # (b,1,h,w)
-                        m = F.interpolate(m, size=(H, W), mode="bilinear", align_corners=False).clamp(0, 1)
-                        m_lat = m[:1].view(1, 1, 1, H, W).to(device=device, dtype=dtype)
-                        # composite end frame ONLY into the white region
-                        tail = image_cond_latent[:, :, -end_t_fix:]
-                        image_cond_latent[:, :, -end_t_fix:] = (
-                            end_latent[:, :, -end_t_fix:] * m_lat + tail * (1.0 - m_lat)
-                        )
-                        # store the per-pixel lock mask for use below
-                        cmask_end = (1.0 - m_lat)   # white -> 0 (locked)
-                    else:
-                        image_cond_latent[:, :, -end_t_fix:] = end_latent[:, :, -end_t_fix:]
-                        cmask_end = None
+                    image_cond_latent[:, :, -end_t_fix:] = end_latent[:, :, -end_t_fix:]
             else:
                 end_t_fix = 0
 
-        # ---------------------------------------------------------------------
-        # 4) Empty latent to be filled by the Wan sampler.
-        #    Shape: [B, 16, total_latents, H, W] for Wan video UNet.
-        # ---------------------------------------------------------------------
         empty_latent = torch.zeros(
             [B, 16, total_latents, H, W],
             device=comfy.model_management.intermediate_device(),
         )
 
-        # ---------------------------------------------------------------------
-        # 5) Mask:
-        #    - First temporal slot (anchor) is fixed: mask=0 at t=0.
-        #    - Last end_t_fix slots are fixed if end_samples is provided
-        #      and use_end_samples is True.
-        #
-        # Wan / SVI Pro use concat_mask==0 to mark slots that should stay
-        # equal to concat_latent_image during sampling.
-        # ---------------------------------------------------------------------
         mask = torch.ones((1, 1, total_latents, H, W), device=device, dtype=dtype)
 
-        # Lock the first temporal slot (anchor).
         mask[:, :, :1] = 0.0
 
-        # Lock the last temporal slots corresponding to end_samples.
         if end_t_fix > 0:
-            if end_mask is not None and cmask_end is not None:
-                mask[:, :, -end_t_fix:] = cmask_end          # spatial partial lock
-            else:
-                mask[:, :, -end_t_fix:] = 0.0                # full-frame lock (original)
-        # ---------------------------------------------------------------------
-        # 6) Inject concat_latent_image and concat_mask into conditioning.
-        #    Both positive and negative conditioning receive the same concat
-        #    latent and mask so the sampler can enforce structure consistently.
-        # ---------------------------------------------------------------------
+            mask[:, :, -end_t_fix:] = 0.0
+
         positive = node_helpers.conditioning_set_values(
             positive,
             {
@@ -284,74 +185,3 @@ class WanImageToVideoSVIProFLF_Cherry(io.ComfyNode):
         out_latent = {"samples": empty_latent}
         return io.NodeOutput(positive, negative, out_latent)
 
-
-
-class WanCutLastSlot(io.ComfyNode):
-
-    """
-    WanCutLastSlot
-    Utility node for Wan video latents: trims a number of temporal slots
-    from the end of a latent clip.
-    In Wan 2.2, 1 temporal slot corresponds to 4 video frames (stride = 4),
-    so cutting 1 slot effectively removes the last 4 frames worth of latent
-    information from the sequence.
-
-    ---
-    License: GPL-3.0
-    Original work by Well-Made.
-    Repository: https://github.com/Well-Made/ComfyUI-Wan-SVI2Pro-FLF
-    """
-
-    @classmethod
-    def define_schema(cls):
-        return io.Schema(
-            node_id="WanCutLastSlot",
-            category="latent/video",
-            inputs=[
-                io.Latent.Input(
-                    "latents",
-                    tooltip=(
-                        "Wan video latents to trim (dict with 'samples' key, "
-                        "shape [B,C,T,H,W]). The last temporal slots will be removed."
-                    ),
-                ),
-                io.Int.Input(
-                    "slots_to_cut",
-                    default=1,
-                    min=1,
-                    max=64,
-                    step=1,
-                    tooltip=(
-                        "How many last temporal slots (T dimension) to cut. "
-                        "In Wan 2.2, 1 slot ≈ 4 frames."
-                    ),
-                ),
-            ],
-            outputs=[
-                io.Latent.Output(display_name="trimmed_latents"),
-            ],
-        )
-
-    @classmethod
-    def execute(cls, latents, slots_to_cut=1) -> io.NodeOutput:
-        """
-        Remove `slots_to_cut` temporal slots from the end of the latent clip.
-
-        - Input:  latents["samples"] with shape [B, C, T, H, W].
-        - Output: same dict, but with T' = T - n, where
-          n = min(slots_to_cut, T - 1), so at least 1 slot always remains.
-        """
-
-        x = latents["samples"]
-        B, C, T, H, W = x.shape
-
-        # Do not allow cutting all temporal slots:
-        # ensure at least 1 slot remains.
-        n = max(1, min(slots_to_cut, T - 1))
-
-        # Keep everything except the last `n` slots.
-        x_trim = x[:, :, : T - n].clone()
-
-        out = latents.copy()
-        out["samples"] = x_trim
-        return io.NodeOutput(out)

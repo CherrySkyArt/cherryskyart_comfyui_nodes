@@ -1,5 +1,5 @@
 from comfy_api.latest import io
-
+import logging
 
 class BoundingBoxUnpack(io.ComfyNode):
     @classmethod
@@ -22,5 +22,13 @@ class BoundingBoxUnpack(io.ComfyNode):
 
     @classmethod
     def execute(cls, bounding_box) -> io.NodeOutput:
-        bb = bounding_box[0][0] if isinstance(bounding_box, list) else bounding_box
-        return io.NodeOutput(int(bb["x"]), int(bb["y"]), int(bb["width"]), int(bb["height"]))
+        try:
+            bb = bounding_box[0] if isinstance(bounding_box, list) else bounding_box
+            return io.NodeOutput(int(bb["x"]), int(bb["y"]), int(bb["width"]), int(bb["height"]))
+        except:
+            logging.error("shiiit bbox error >.<")
+            logging.error("shiiit bbox error >.<")
+            logging.error("shiiit bbox error >.<")
+            logging.error("shiiit bbox error >.<")
+            bb = bounding_box[0][0] if isinstance(bounding_box, list) else bounding_box
+            return io.NodeOutput(int(bb["x"]), int(bb["y"]), int(bb["width"]), int(bb["height"]))

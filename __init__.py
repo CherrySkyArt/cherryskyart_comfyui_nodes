@@ -22,9 +22,13 @@ from .lazy_sort import LazySort
 from .stringPlus import StringPlus
 from .first_last_v2 import WanFLF2VMask_Cherry
 from .first_last_v3 import WanImageToVideoSVIProFLF_Cherry
+from .first_last_v4 import WanImageToVideoSVIProFLF_v4_Cherry
 from .first_last_v2_old import WanFLF2VMask_Cherry_old
 from .bbox_unpack import BoundingBoxUnpack
+from .bbox_expand import BoundingBoxExpand
 from .alpha_composite import AlphaComposite
+from .text_concat import TextConcat
+from .mask_white_percent import MaskWhitePercent
 
 WEB_DIRECTORY = "./web"
 
@@ -41,9 +45,13 @@ NODE_CLASS_MAPPINGS = {
     "CherryStringTemplate": StringPlus,
     "WanFLF2VMask_Cherry": WanFLF2VMask_Cherry,
     "WanImageToVideoSVIProFLF_Cherry": WanImageToVideoSVIProFLF_Cherry,
+    "WanImageToVideoSVIProFLF_v4_Cherry": WanImageToVideoSVIProFLF_v4_Cherry,
     "WanFLF2VMask_Cherry_old": WanFLF2VMask_Cherry_old,
     "BoundingBoxUnpack": BoundingBoxUnpack,
     "AlphaComposite_Cherry": AlphaComposite,
+    "TextConcat_Cherry": TextConcat,
+    "BoundingBoxExpand": BoundingBoxExpand,
+    "MaskWhitePercent": MaskWhitePercent,
     # "MaskBatchSplitter //Inspire": MaskBatchSplitter,
 }
 
@@ -61,16 +69,20 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "CherryStringTemplate": "String Plus (Template) 🍒",
     "WanFLF2VMask_Cherry": "WanFLF2VMask_Cherry",
     "WanImageToVideoSVIProFLF_Cherry": "WanImageToVideoSVIProFLF_Cherry",
+    "WanImageToVideoSVIProFLF_v4_Cherry": "WanImageToVideoSVIProFLF_v4_Cherry",
     "WanFLF2VMask_Cherry_old": "WanFLF2VMask_Cherry_old",
     "BoundingBoxUnpack": "Bounding Box Unpack 🍒",
     "AlphaComposite_Cherry": "Alpha Composite 🍒",
+    "TextConcat_Cherry": "Text Concat 🍒",
+    "BoundingBoxExpand": "Bounding Box Expand 🍒",
+    "MaskWhitePercent": "Mask White Percent 🍒",
 }
 
 
 class CherryExtension(ComfyExtension):
     @override
     async def get_node_list(self) -> list[type[io.ComfyNode]]:
-        return [AppendAnyToList, FirstLast, KJBboxToComfyBBox, MaskGrowPlus, ImageListToImageBatch, Remove1stImageOfBatch, CherrySAM3Segment, DepthMeasure, LazySort, StringPlus, WanFLF2VMask_Cherry, WanImageToVideoSVIProFLF_Cherry, WanFLF2VMask_Cherry_old, BoundingBoxUnpack, AlphaComposite]
+        return [AppendAnyToList, FirstLast, KJBboxToComfyBBox, MaskGrowPlus, ImageListToImageBatch, Remove1stImageOfBatch, CherrySAM3Segment, DepthMeasure, LazySort, StringPlus, WanFLF2VMask_Cherry, WanImageToVideoSVIProFLF_Cherry, WanFLF2VMask_Cherry_old, BoundingBoxUnpack, AlphaComposite, TextConcat, BoundingBoxExpand, MaskWhitePercent]
 
 async def comfy_entrypoint() -> CherryExtension:
     return CherryExtension()
