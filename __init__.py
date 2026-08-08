@@ -29,6 +29,7 @@ from .bbox_expand import BoundingBoxExpand
 from .alpha_composite import AlphaComposite
 from .text_concat import TextConcat
 from .mask_white_percent import MaskWhitePercent
+from .text_editor_minimax import TextEditorMinimax
 
 WEB_DIRECTORY = "./web"
 
@@ -52,6 +53,7 @@ NODE_CLASS_MAPPINGS = {
     "TextConcat_Cherry": TextConcat,
     "BoundingBoxExpand": BoundingBoxExpand,
     "MaskWhitePercent": MaskWhitePercent,
+    "TextEditorMinimax": TextEditorMinimax
     # "MaskBatchSplitter //Inspire": MaskBatchSplitter,
 }
 
@@ -76,13 +78,14 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "TextConcat_Cherry": "Text Concat 🍒",
     "BoundingBoxExpand": "Bounding Box Expand 🍒",
     "MaskWhitePercent": "Mask White Percent 🍒",
+    "TextEditorMinimax": "Text Editor Minimax 🍒",
 }
 
 
 class CherryExtension(ComfyExtension):
     @override
     async def get_node_list(self) -> list[type[io.ComfyNode]]:
-        return [AppendAnyToList, FirstLast, KJBboxToComfyBBox, MaskGrowPlus, ImageListToImageBatch, Remove1stImageOfBatch, CherrySAM3Segment, DepthMeasure, LazySort, StringPlus, WanFLF2VMask_Cherry, WanImageToVideoSVIProFLF_Cherry, WanFLF2VMask_Cherry_old, BoundingBoxUnpack, AlphaComposite, TextConcat, BoundingBoxExpand, MaskWhitePercent]
+        return [AppendAnyToList, FirstLast, KJBboxToComfyBBox, MaskGrowPlus, ImageListToImageBatch, Remove1stImageOfBatch, CherrySAM3Segment, DepthMeasure, LazySort, StringPlus, WanFLF2VMask_Cherry, WanImageToVideoSVIProFLF_Cherry, WanFLF2VMask_Cherry_old, BoundingBoxUnpack, AlphaComposite, TextConcat, BoundingBoxExpand, MaskWhitePercent, TextEditorMinimax]
 
 async def comfy_entrypoint() -> CherryExtension:
     return CherryExtension()
