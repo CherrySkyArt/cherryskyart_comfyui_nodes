@@ -14,7 +14,7 @@ function highlightLine(line) {
   escaped = escaped.replace(/&lt;d&gt;(.*?)&lt;\/d&gt;/g, '<span class="tem-tag">&lt;d&gt;$1&lt;/d&gt;</span>');
   escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<span class="tem-bold">**$1**</span>');
   escaped = escaped.replace(/\b(\d+:\d+\.\d+|\d+:\d+|\d+\.\d+)\b/g, '<span class="tem-time">$1</span>');
-  escaped = escaped.replace(/\b(subject_definitions|summary|retention_analysis|detailed_description|overall_soundscape|non_diegetic_music)\b/gi, '<span class="tem-field">$1</span>');
+  escaped = escaped.replace(/\b(subject_definitions|summary|retention_analysis|detailed_description|overall_soundscape|non_diegetic_music|diegetic_music)\b/gi, '<span class="tem-field">$1</span>');
   escaped = escaped.replace(/&lt;((?:subject|picture|video|audio)\s*\d+)&gt;/gi, '<span class="tem-ref">&lt;$1&gt;</span>');
   escaped = escaped.replace(/\((s\d+)\)/gi, '<span class="tem-subj">($1)</span>');
   return escaped;
@@ -158,7 +158,7 @@ function injectStyles() {
   document.head.appendChild(style);
 }
 
-function buildEditorElement(initialValue, onChange) {
+function buildEditorElement(initialValue, onChange, initialFontSize, onFontSizeChange) {
   injectStyles();
 
   const root = document.createElement("div");
@@ -193,9 +193,9 @@ function buildEditorElement(initialValue, onChange) {
   const fontSizeLabel = root.querySelector(".tem-font-size-label");
 
   let wrapEnabled = true;
-  let fontSize = 12;
-  const FONT_MIN = 9;
-  const FONT_MAX = 24;
+  const FONT_MIN = 4;
+  const FONT_MAX = 500;
+  let fontSize = Math.min(FONT_MAX, Math.max(FONT_MIN, initialFontSize || 12));
   input.value = initialValue || "";
 
   // Renders one wrapper <div> per source line in the highlight layer so each
@@ -243,13 +243,26 @@ function buildEditorElement(initialValue, onChange) {
     fontSizeLabel.textContent = `${fontSize}px`;
     fontMinusBtn.disabled = fontSize <= FONT_MIN;
     fontPlusBtn.disabled = fontSize >= FONT_MAX;
+    onFontSizeChange?.(fontSize);
     update(); // line heights depend on font size
   }
 
   input.addEventListener("input", update);
   // Stop ComfyUI's canvas from also handling drag/zoom while typing/scrolling.
-  input.addEventListener("pointerdown", (e) => e.stopPropagation());
-  input.addEventListener("wheel", (e) => e.stopPropagation());
+  // Middle-click (button 1) is left alone so canvas panning still works over the textarea.
+  // MIDDLE: 
+  // input.addEventListener("pointerdown", (e) => {
+  //   if (e.button !== 1) e.stopPropagation();
+  // });
+  // Scroll by a fixed number of lines per wheel click instead of the
+  // browser's default (which varies by OS/pixel-vs-line delta mode).
+  const SCROLL_LINES_PER_WHEEL = 3;
+  input.addEventListener("wheel", (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const lineHeight = fontSize * 1.5;
+    body.scrollTop += Math.sign(e.deltaY) * SCROLL_LINES_PER_WHEEL * lineHeight;
+  });
 
   fontMinusBtn.addEventListener("click", () => {
     fontSize = Math.max(FONT_MIN, fontSize - 1);
@@ -333,9 +346,19 @@ app.registerExtension({
             }
           }
 
-          const editor = buildEditorElement(initialValue, () => {
-            node.setDirtyCanvas(true, false);
-          });
+          // Stored on node.properties so it round-trips through the saved
+          // workflow JSON (like size/position), surviving a page refresh.
+          node.properties = node.properties || {};
+          const editor = buildEditorElement(
+            initialValue,
+            () => {
+              node.setDirtyCanvas(true, false);
+            },
+            node.properties.fontSize,
+            (fontSize) => {
+              node.properties.fontSize = fontSize;
+            }
+          );
           editor.root.style.minHeight = "220px";
 
           if (typeof node.addDOMWidget !== "function") {
@@ -352,7 +375,13 @@ app.registerExtension({
           });
           widget.serializeValue = () => editor.getValue();
 
-          node.setSize?.(node.computeSize());
+          // Only auto-size brand-new nodes. A node restored from a saved
+          // workflow already has its user-chosen size applied by
+          // configure() before this runs, so leave it alone — otherwise
+          // every page refresh would stomp the saved size.
+          if (!node.size || (node.size[0] === 0 && node.size[1] === 0)) {
+            node.setSize?.(node.computeSize());
+          }
         } catch (err) {
           console.error("[text_editor_minimax] failed to build custom widget:", err);
         }
