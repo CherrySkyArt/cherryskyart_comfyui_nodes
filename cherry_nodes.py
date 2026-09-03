@@ -25,7 +25,7 @@ class AppendAnyToList(io.ComfyNode):
             inputs=[
                 io.Custom("*").Input("list_a"),
                 io.Custom("*").Input("anything"),
-                io.Boolean.Input("dedup", default=False, tooltip="ON = duplicate images are not appended to list -> all images are unique. Helpful b/c rerunning workflow keep all items in list sometimes ¯\_(ツ)_/¯.",), 
+                io.Boolean.Input("dedup", default=False, tooltip="ON = duplicate images are not appended to list -> all images are unique. Helpful b/c rerunning workflow keep all items in list sometimes :shrug_emoji:",), 
             ],
             outputs=[
                 io.Image.Output("IMAGE", is_output_list=True),
