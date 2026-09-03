@@ -37,6 +37,9 @@ function applyTextReplacements(graph, value) {
     if (!nodes.length) nodes = allNodes.filter((n) => n.title === split[0])
     if (!nodes.length) return match
 
+    // mode 4 = bypassed in LiteGraph; resolve bypassed nodes to empty string
+    if (nodes[0].mode === 4) return ""
+
     const widget = nodes[0].widgets?.find((w) => w.name === split[1])
     if (!widget) return match
 

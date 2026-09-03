@@ -154,12 +154,10 @@ function attachDragReorder(node, widget) {
     ctx.fillRect(zoneLeft, y + 1, HANDLE_WIDTH, height - 2)
 
     ctx.fillStyle = this.secondary_text_color
-    for (const dy of [-4, 0, 4]) {
-      ctx.beginPath()
-      ctx.arc(cx - 3, cy + dy, 1.3, 0, Math.PI * 2)
-      ctx.arc(cx + 3, cy + dy, 1.3, 0, Math.PI * 2)
-      ctx.fill()
-    }
+    ctx.textAlign = "center"
+    ctx.textBaseline = "middle"
+    ctx.font = "12px sans-serif"
+    ctx.fillText("☰", cx, cy + 1)
     ctx.restore()
   }
 }

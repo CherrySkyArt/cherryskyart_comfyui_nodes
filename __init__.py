@@ -18,6 +18,7 @@ from .sam3 import CherrySAM3Segment
 from .depth_measure import DepthMeasure
 from .lazy_sort import LazySort
 from .stringPlus import StringPlus
+from .longest_string import LongestString
 # from .preview_any import PreviewAny
 # from .first_last import FirstLast
 # from .first_last_v2 import WanFLF2VMask_Cherry
@@ -35,45 +36,11 @@ from .stackable_rows import StackableRows
 
 WEB_DIRECTORY = "./web"
 
-NODE_CLASS_MAPPINGS = {
-    "AppendAnyToList": AppendAnyToList,
-    "KJBboxToComfyBBox": KJBboxToComfyBBox,
-    "MaskGrowPlus": MaskGrowPlus,
-    "ImageListToImageBatch": ImageListToImageBatch,
-    "Remove1stImageOfBatch": Remove1stImageOfBatch,
-    "CherrySAM3Segment": CherrySAM3Segment,
-    "DepthMeasure": DepthMeasure,
-    "LazySort": LazySort,
-    "CherryStringTemplate": StringPlus,
-    "BoundingBoxUnpack": BoundingBoxUnpack,
-    "AlphaComposite_Cherry": AlphaComposite,
-    "BoundingBoxExpand": BoundingBoxExpand,
-    "MaskWhitePercent": MaskWhitePercent,
-    "PngInMemory_Cherry": PngInMemory,
-}
-
-NODE_DISPLAY_NAME_MAPPINGS = {
-    "AppendAnyToList": "Append Any To List",
-    "KJBboxToComfyBBox": "KJ Bbox To Comfy BBox",
-    "MaskGrowPlus": "Grow Mask+",
-    "ImageListToImageBatch": "Image List to Image Batch",
-    "Remove1stImageOfBatch": "Remove 1st Entry",
-    "CherrySAM3Segment": "SAM3 Segment (Cherry)",
-    "DepthMeasure": "Depth Measure",
-    "LazySort": "Lazy Sort",
-    "CherryStringTemplate": "String Plus (Template) 🍒",
-    "BoundingBoxUnpack": "Bounding Box Unpack 🍒",
-    "AlphaComposite_Cherry": "Alpha Composite 🍒",
-    "BoundingBoxExpand": "Bounding Box Expand 🍒",
-    "MaskWhitePercent": "Mask White Percent 🍒",
-    "PngInMemory_Cherry": "PNG In Memory 🍒",
-}
-
 
 class CherryExtension(ComfyExtension):
     @override
     async def get_node_list(self) -> list[type[io.ComfyNode]]:
-        return [AppendAnyToList, KJBboxToComfyBBox, MaskGrowPlus, ImageListToImageBatch, Remove1stImageOfBatch, CherrySAM3Segment, DepthMeasure, LazySort, StringPlus, BoundingBoxUnpack, AlphaComposite, BoundingBoxExpand, MaskWhitePercent, PngInMemory, StackableRows]
+        return [AppendAnyToList, KJBboxToComfyBBox, MaskGrowPlus, ImageListToImageBatch, Remove1stImageOfBatch, CherrySAM3Segment, DepthMeasure, LazySort, StringPlus, BoundingBoxUnpack, AlphaComposite, BoundingBoxExpand, MaskWhitePercent, PngInMemory, StackableRows, LongestString]
 
 async def comfy_entrypoint() -> CherryExtension:
     return CherryExtension()
