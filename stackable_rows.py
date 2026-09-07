@@ -61,5 +61,10 @@ class StackableRows(io.ComfyNode):
         ordered_names.extend(remaining)
 
         sep = separator.replace("\\n", "\n").replace("\\t", "\t")
-        text = sep.join(str(rows[name] or "") for name in ordered_names)
+
+        def row_text(name):
+            value = str(rows[name] or "")
+            return "" if value in ("null", "None") else value
+
+        text = sep.join(row_text(name) for name in ordered_names)
         return io.NodeOutput(text)
