@@ -3,7 +3,8 @@ import sys
 from comfy_api.latest import io
 
 
-STEP_OPTIONS = ["1", "0.1", "0.01", "0.001"]
+# Ascending so the combo's right arrow (+) makes the step bigger
+STEP_OPTIONS = ["0.001", "0.01", "0.1", "1"]
 
 
 class FloatSlider(io.ComfyNode):

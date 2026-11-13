@@ -28,6 +28,8 @@ from .play_sound import PlaySoundOnFinish
 from .load_txt_prompts import LoadTxtPrompts
 from .float_slider import FloatSlider
 from .save_nodes import SaveImageCherry, SaveVideoCherry
+from .get_by_index import GetByIndex
+from .interactive_crop import InteractiveCrop
 # from .text_editor_minimax import TextEditorMinimax
 
 WEB_DIRECTORY = "./web"
@@ -36,7 +38,7 @@ WEB_DIRECTORY = "./web"
 class CherryExtension(ComfyExtension):
     @override
     async def get_node_list(self) -> list[type[io.ComfyNode]]:
-        return [AppendAnyToList, KJBboxToComfyBBox, MaskGrowPlus, ImageListToImageBatch, Remove1stImageOfBatch, DepthMeasure, LazySort, StringPlus, BoundingBoxUnpack, AlphaComposite, BoundingBoxExpand, MaskWhitePercent, PngInMemory, StackableRows, LongestString, AIImageDetect, ExifSpoof, PlaySoundOnFinish, LoadTxtPrompts, FloatSlider, SaveImageCherry, SaveVideoCherry]
+        return [AppendAnyToList, KJBboxToComfyBBox, MaskGrowPlus, ImageListToImageBatch, Remove1stImageOfBatch, DepthMeasure, LazySort, StringPlus, BoundingBoxUnpack, AlphaComposite, BoundingBoxExpand, MaskWhitePercent, PngInMemory, StackableRows, LongestString, AIImageDetect, ExifSpoof, PlaySoundOnFinish, LoadTxtPrompts, FloatSlider, SaveImageCherry, SaveVideoCherry, GetByIndex, InteractiveCrop]
 
 async def comfy_entrypoint() -> CherryExtension:
     return CherryExtension()
